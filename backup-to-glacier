@@ -1,0 +1,44 @@
+#!/usr/bin/env ruby
+
+require 'fog'
+require 'fileutils'
+
+def archive(path)
+  path = File.expand_path path
+  unless File.directory? path
+    raise ArgumentError.new 'Argument should be a directory path'
+  end
+
+  file_name = File.basename path
+  dir_name  = File.dirname path
+  archive_path = "#{dir_name}/#{file_name}.tar"
+  FileUtils.rm_f archive_path if File.exist? archive_path
+
+  system "tar -cvf #{dir_name}/#{file_name}.tar #{path}"
+  File.new "#{dir_name}/#{file_name}.tar"
+end
+
+
+def backup(file, vault_id)
+  unless ENV['VAULT_ID']
+    raise RuntimeError.new 'VAULT_ID should be specified as ENV'
+  end
+
+  glacier = Fog::AWS::Glacier.new
+  vault = glacier.vaults.get(vault_id)
+  vault.archives.create(
+    body: file,
+    multipart_chunk_size: 1024*1024,
+    description: "Adding archive file at #{Time.now.to_s}"
+  )
+end
+
+def start
+  archive_path = ENV['ARCHIVE_PATH']
+  vault_id = ENV['VAULT_ID']
+
+  archive_file = archive(archive_path)
+  backup(archive_file, vault_id)
+end
+
+start
